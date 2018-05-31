@@ -1,4 +1,5 @@
 ﻿using System;
+using BenchmarkDotNet.Running;
 
 namespace HAMT.NET.Benchmarks
 {
@@ -6,7 +7,7 @@ namespace HAMT.NET.Benchmarks
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            BenchmarkRunner.Run<PopcntBenchmark>();
         }
     }
 }
