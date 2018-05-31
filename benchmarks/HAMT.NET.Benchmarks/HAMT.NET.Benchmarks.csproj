@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.10.14" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\HAMT.NET\HAMT.NET.csproj" />
   </ItemGroup>
 
