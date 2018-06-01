@@ -56,13 +56,13 @@ namespace HAMT.NET
             {
                 var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length];
                 Array.Copy(_nodes, newNodes, _nodes.Length);
-                var index = Popcnt.PopCount(_bitmap >> (int) bit);
+                var index = Popcnt.PopCount((_bitmap >> (int) bit) & Mask);
                 newNodes[index] = _nodes[index].Add(key, value, hash, shift + Shift);
                 return new BitMapNode<TKey, TValue>(_bitmap, newNodes);
             }
             else
             {
-                var index = Popcnt.PopCount(_bitmap >> (int) bit);
+                var index = Popcnt.PopCount((_bitmap >> (int)bit) & Mask);
                 var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length + 1];
                 Array.Copy(_nodes, newNodes, index);
                 Array.Copy(_nodes, index, newNodes, index + 1, _nodes.Length - index);
@@ -75,7 +75,7 @@ namespace HAMT.NET
         {
             var bit = 1U << (int) ((hash >> shift) & Mask);
             if ((_bitmap & bit) == 0) return false;
-            var index = Popcnt.PopCount(_bitmap >> (int) bit);
+            var index = Popcnt.PopCount((_bitmap >> (int)bit) & Mask);
             return _nodes[index].ContainsKey(key, hash, shift + Shift);
         }
     }
@@ -121,8 +121,8 @@ namespace HAMT.NET
                 }
                 else
                 {
-                    // TODO handle part of hash collisions
-                    throw new NotImplementedException();
+                    return new BitMapNode<TKey, TValue>(bit1,
+                        new[] {Add(key, value, hash, shift + Shift)});
                 }
             }
         }
