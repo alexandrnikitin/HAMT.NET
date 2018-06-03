@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Intrinsics.X86;
 
-namespace HAMT.NET
+namespace HAMT.NET.V2
 {
     public abstract class ImmutableDictionary<TKey, TValue> where TKey : IEquatable<TKey>
     {
@@ -78,30 +78,28 @@ namespace HAMT.NET
     {
         private readonly TKey _key;
         private readonly TValue _value;
-        private readonly uint _hash;
 
         public KeyValueNode(TKey key, TValue value, uint hash)
         {
             _key = key;
             _value = value;
-            _hash = hash;
         }
 
         internal override ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, uint hash, int shift)
         {
-            if (hash == _hash && key.Equals(_key))
+            if (hash == (uint)_key.GetHashCode() && key.Equals(_key))
             {
                 // TODO duplicates
                 return new KeyValueNode<TKey, TValue>(key, value, hash);
             }
-            else if (hash == _hash)
+            else if (hash == (uint)_key.GetHashCode())
             {
                 // TODO handle collisions, at what shift level?
                 throw new NotImplementedException();
             }
             else
             {
-                var bit1 = 1U << (int) ((_hash >> shift) & Mask);
+                var bit1 = 1U << (int) (((uint)_key.GetHashCode() >> shift) & Mask);
                 var bit2 = 1U << (int) ((hash >> shift) & Mask);
                 if (bit1 < bit2)
                 {
@@ -123,7 +121,7 @@ namespace HAMT.NET
 
         internal override bool ContainsKey(TKey key, uint hash, int shift)
         {
-            return hash == _hash && key.Equals(_key);
+            return hash == (uint)_key.GetHashCode() && key.Equals(_key);
         }
     }
 }

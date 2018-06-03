@@ -1,25 +1,21 @@
 ﻿using System;
 using BenchmarkDotNet.Attributes;
-using ImTools;
-using ImmutableDictionaryBCL = System.Collections.Immutable.ImmutableDictionary<int, int>;
 
 namespace HAMT.NET.Benchmarks
 {
     [MemoryDiagnoser]
-    public class IntsContainsBenchmark
+    public class IntsContainsCompareBenchmark
     {
         private const int N = 1002;
         private readonly int[] _numbers;
         private readonly Random _random = new Random(42);
         private readonly ImmutableDictionary<int, int> _sut;
-        private readonly ImmutableDictionaryBCL _sutBCL;
-        private readonly ImHashMap<int, int> _sutIm;
+        private readonly V2.ImmutableDictionary<int, int> _sutV2;
 
-        public IntsContainsBenchmark()
+        public IntsContainsCompareBenchmark()
         {
             _sut = ImmutableDictionary<int, int>.Empty;
-            _sutBCL = ImmutableDictionaryBCL.Empty;
-            _sutIm = ImHashMap<int, int>.Empty;
+            _sutV2 = V2.ImmutableDictionary<int, int>.Empty;
 
             _numbers = new int[N];
             for (var i = 0; i < _numbers.Length; i++)
@@ -27,8 +23,7 @@ namespace HAMT.NET.Benchmarks
                 var next = _random.Next();
                 _numbers[i] = next;
                 _sut = _sut.Add(next, next);
-                _sutBCL = _sutBCL.Add(next, next);
-                _sutIm = _sutIm.AddOrUpdate(next, next);
+                _sutV2 = _sutV2.Add(next, next);
             }
         }
 
@@ -45,24 +40,12 @@ namespace HAMT.NET.Benchmarks
         }
 
         [Benchmark(OperationsPerInvoke = N)]
-        public bool ContainsBCL()
+        public bool ContainsV2()
         {
             var consume = false;
             foreach (var n in _numbers)
             {
-                consume = _sutBCL.ContainsKey(n);
-            }
-
-            return consume;
-        }
-
-        [Benchmark(OperationsPerInvoke = N)]
-        public bool ContainsImTools()
-        {
-            var consume = false;
-            foreach (var n in _numbers)
-            {
-                consume = _sutIm.TryFind(n, out _);
+                consume = _sutV2.ContainsKey(n);
             }
 
             return consume;

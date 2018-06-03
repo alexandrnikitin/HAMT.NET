@@ -24,7 +24,7 @@ namespace HAMT.NET.Benchmarks
                 numbers[i] = NextUInt64();
         }
 
-        [Benchmark]
+        [Benchmark(OperationsPerInvoke = N)]
         public int PopCount1()
         {
             int counter = 0;
@@ -33,7 +33,7 @@ namespace HAMT.NET.Benchmarks
             return counter;
         }
 
-        [Benchmark]
+        [Benchmark(OperationsPerInvoke = N)]
         public int PopCountIntrinsic()
         {
             long longResult = 0;

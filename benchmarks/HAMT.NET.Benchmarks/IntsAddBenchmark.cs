@@ -23,7 +23,7 @@ namespace HAMT.NET.Benchmarks
                 _numbers[i] = _random.Next();
             }
 
-            _sut = ImmutableDictionary.Empty<int, int>();
+            _sut = ImmutableDictionary<int, int>.Empty;
             _sutBCL = ImmutableDictionaryBCL.Empty;
             _sutIm = ImHashMap<int, int>.Empty;
         }
