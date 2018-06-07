@@ -27,7 +27,7 @@ namespace HAMT.NET.V3
     internal sealed class EmptyNode<TKey, TValue> : ImmutableDictionary<TKey, TValue> where TKey : IEquatable<TKey>
     {
         internal override ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, uint hash, int shift) =>
-            new BitMapNode<TKey, TValue, ValueNodes<TKey, TValue>>(0, null, 1U << (int)((hash >> shift) & Mask), new ValueNodes<TKey, TValue>(key, value));
+            new BitMapNode<TKey, TValue, ValueNode1<TKey, TValue>>(0, null, 1U << (int)((hash >> shift) & Mask), new ValueNode1<TKey, TValue>(key, value));
 
         internal override bool ContainsKey(TKey key, uint hash, int shift) => false;
     }

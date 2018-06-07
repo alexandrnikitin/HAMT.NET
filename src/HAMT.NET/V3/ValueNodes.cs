@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Diagnostics.Contracts;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace HAMT.NET.V3
 {
-    public struct ValueNodes<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ValueNode1<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
-        public ValueNodes(TKey key, TValue value)
+        public ValueNode1(TKey key, TValue value)
         {
             _key = key;
             _value = value;
@@ -14,9 +17,10 @@ namespace HAMT.NET.V3
         private readonly TKey _key;
         private readonly TValue _value;
 
-        public bool ContainsKey(TKey key, uint hash, long index)
+        public unsafe bool ContainsKey(TKey key, uint hash, long _)
         {
-            return hash == (uint) _key.GetHashCode() && key.Equals(_key);
+            var ptr = (int*)Unsafe.AsPointer(ref this);
+            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
         }
 
         public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
@@ -37,6 +41,7 @@ namespace HAMT.NET.V3
         }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode2<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -53,14 +58,20 @@ namespace HAMT.NET.V3
         }
 
 
-        public bool ContainsKey(TKey key, uint hash, long index)
+        public unsafe bool ContainsKey(TKey key, uint hash, long index)
+        {
+            var ptr = (byte*)Unsafe.AsPointer(ref this) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
+        }
+
+        public unsafe bool ContainsKeyBaseline(TKey key, uint hash, long index)
         {
             if (index == 0)
             {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
+                return hash == (uint)_key1.GetHashCode() && key.Equals(_key1);
             }
 
-            return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
+            return hash == (uint)_key2.GetHashCode() && key.Equals(_key2);
         }
 
         public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
