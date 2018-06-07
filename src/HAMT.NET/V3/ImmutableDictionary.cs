@@ -7,7 +7,7 @@ namespace HAMT.NET.V3
     {
         public static readonly ImmutableDictionary<TKey, TValue> Empty = new EmptyNode<TKey, TValue>();
 
-        protected const int Shift = 6;
+        protected const int Shift = 3;
         protected const int Mask = (1 << Shift) - 1;
 
         public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value)
@@ -61,14 +61,25 @@ namespace HAMT.NET.V3
             }
             else if ((_bitmapValues & bit) != 0)
             {
-                // TODO
-                throw new NotImplementedException();
+                // TODO collisions and same value
+                var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length + 1];
+                var index = Popcnt.PopCount((_bitmapNodes >> (int)bit) & Mask);
+                Array.Copy(_nodes, newNodes, index);
+                Array.Copy(_nodes, index, newNodes, index + 1, _nodes.Length - index);
+                newNodes[index] = AddTwo(key, value, hash, shift + 1, bit);
+                // TODO clear lifted values to default
+                return new BitMapNode<TKey, TValue, TValues>(_bitmapNodes ^ bit, newNodes, _bitmapValues | bit, _values);
             }
             else
             {
                 var index = (uint)Popcnt.PopCount((_bitmapValues >> (int)bit) & Mask);
                 return _values.Add(key, value, _bitmapNodes, _nodes, _bitmapValues, index);
             }
+        }
+
+        private ImmutableDictionary<TKey, TValue> AddTwo(TKey key, TValue value, uint hash, int shift, uint bit)
+        {
+            throw new NotImplementedException();
         }
 
         internal override bool ContainsKey(TKey key, uint hash, int shift)
