@@ -17,10 +17,12 @@ namespace HAMT.NET.V4
         TValue GetValue(long index);
 
         [Pure]
-        ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index);
+        ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>;
 
         [Pure]
-        ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index);
+        ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>;
     }
 
     public static class ValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
@@ -43,9 +45,10 @@ namespace HAMT.NET.V4
             return Unsafe.Read<TValue>(ptr);
         }
 
-        public static unsafe ImmutableDictionary<TKey, TValue> Expand<TFrom, TTo>(
-            TFrom @from, TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-            where TFrom : struct, IValueNodes<TKey, TValue> where TTo : struct, IValueNodes<TKey, TValue>
+        public static unsafe ImmutableDictionary<TKey, TValue> Expand<TFrom, TTo, TBranchNodes>(
+            TFrom @from, TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TFrom : struct, IValueNodes<TKey, TValue> where TTo : struct, IValueNodes<TKey, TValue> 
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
         {
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
@@ -58,12 +61,14 @@ namespace HAMT.NET.V4
                 (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
 
-            return new BitMapNode<TKey, TValue, TTo>(bitmapNodes, nodes, bitmapValues, to);
+            return new BitMapNode<TKey, TValue, TTo, TBranchNodes>(bitmapNodes, nodes, bitmapValues, to);
         }
 
-        public static unsafe ImmutableDictionary<TKey, TValue> Shrink<TFrom, TTo>(
-            TFrom @from, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-            where TFrom : struct, IValueNodes<TKey, TValue> where TTo : struct, IValueNodes<TKey, TValue>
+        public static unsafe ImmutableDictionary<TKey, TValue> Shrink<TFrom, TTo, TBranchNodes>(
+            TFrom @from, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TFrom : struct, IValueNodes<TKey, TValue> 
+            where TTo : struct, IValueNodes<TKey, TValue> 
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
         {
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
@@ -74,7 +79,7 @@ namespace HAMT.NET.V4
                 (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>() - index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
 
-            return new BitMapNode<TKey, TValue, TTo>(bitmapNodes, nodes, bitmapValues, to);
+            return new BitMapNode<TKey, TValue, TTo, TBranchNodes>(bitmapNodes, nodes, bitmapValues, to);
         }
 
     }
@@ -85,11 +90,18 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => false;
         public TKey GetKey(long index) => default(TKey);
         public TValue GetValue(long index) => default(TValue);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode0<TKey, TValue>, ValueNode1<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index) 
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode0<TKey, TValue>, ValueNode1<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes,
+                nodes, bitmapValues, index);
+        }
 
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index) 
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
             throw new NotImplementedException();
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -107,10 +119,18 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode1<TKey, TValue>, ValueNode2<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) => 
-            ValueNodes<TKey, TValue>.Shrink<ValueNode1<TKey, TValue>, ValueNode0<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode1<TKey, TValue>, ValueNode2<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes,
+                bitmapValues, index);
+        }
+
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode1<TKey, TValue>, ValueNode0<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -142,34 +162,18 @@ namespace HAMT.NET.V4
 
             return hash == (uint)_key2.GetHashCode() && key.Equals(_key2);
         }
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode2<TKey, TValue>, ValueNode3<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-
-        public ImmutableDictionary<TKey, TValue> AddBaseline(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
         {
-            if (index == 0)
-            {
-                var values = new ValueNode3<TKey, TValue>(key, value, _key1, _value1, _key2, _value2);
-                return new BitMapNode<TKey, TValue, ValueNode3<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 1)
-            {
-                var values = new ValueNode3<TKey, TValue>(_key1, _value1, key, value, _key2, _value2);
-                return new BitMapNode<TKey, TValue, ValueNode3<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            {
-                var values = new ValueNode3<TKey, TValue>(_key1, _value1, _key2, _value2, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode3<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
+            return ValueNodes<TKey, TValue>.Expand<ValueNode2<TKey, TValue>, ValueNode3<TKey, TValue>, TBranchNodes>(
+                this, key, value, bitmapNodes, nodes,bitmapValues, index);
         }
 
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode2<TKey, TValue>, ValueNode1<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
-
-
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode2<TKey, TValue>, ValueNode1<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -195,11 +199,18 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode3<TKey, TValue>, ValueNode4<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode3<TKey, TValue>, ValueNode2<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode3<TKey, TValue>, ValueNode4<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes,
+                bitmapValues, index);
+        }
 
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode3<TKey, TValue>, ValueNode2<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -229,10 +240,18 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode4<TKey, TValue>, ValueNode5<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode4<TKey, TValue>, ValueNode3<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode4<TKey, TValue>, ValueNode5<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes,
+                bitmapValues, index);
+        }
+
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode4<TKey, TValue>, ValueNode3<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -267,11 +286,18 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode5<TKey, TValue>, ValueNode6<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode5<TKey, TValue>, ValueNode4<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode5<TKey, TValue>, ValueNode6<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes,
+                bitmapValues, index);
+        }
 
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode5<TKey, TValue>, ValueNode4<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -310,11 +336,17 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode6<TKey, TValue>, ValueNode7<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode6<TKey, TValue>, ValueNode5<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode6<TKey, TValue>, ValueNode7<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
+        }
 
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode6<TKey, TValue>, ValueNode5<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -357,11 +389,17 @@ namespace HAMT.NET.V4
         public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Expand<ValueNode7<TKey, TValue>, ValueNode8<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode7<TKey, TValue>, ValueNode6<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Expand<ValueNode7<TKey, TValue>, ValueNode8<TKey, TValue>, TBranchNodes>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
+        }
 
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode7<TKey, TValue>, ValueNode6<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -409,13 +447,16 @@ namespace HAMT.NET.V4
         public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
         public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
 
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
+        public ImmutableDictionary<TKey, TValue> Add<TBranchNodes>(TKey key, TValue value, ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
         {
             throw new NotImplementedException();
         }
-        public ImmutableDictionary<TKey, TValue> Shrink(ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
-            ValueNodes<TKey, TValue>.Shrink<ValueNode8<TKey, TValue>, ValueNode7<TKey, TValue>>(this, bitmapNodes, nodes, bitmapValues, index);
 
+        public ImmutableDictionary<TKey, TValue> Shrink<TBranchNodes>(ulong bitmapNodes, TBranchNodes nodes, ulong bitmapValues, uint index)
+            where TBranchNodes : struct, IBranchNodes<TKey, TValue>
+        {
+            return ValueNodes<TKey, TValue>.Shrink<ValueNode8<TKey, TValue>, ValueNode7<TKey, TValue>, TBranchNodes>(this, bitmapNodes, nodes, bitmapValues, index);
+        }
     }
 }
