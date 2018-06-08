@@ -66,15 +66,14 @@ namespace HAMT.NET.V3
                 // TODO collisions and same value
                 var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length + 1];
                 var index = Popcnt.PopCount(_bitmapNodes & (bit - 1));
-                var indexValues = Popcnt.PopCount(_bitmapValues & (bit - 1));
                 Array.Copy(_nodes, newNodes, index);
                 Array.Copy(_nodes, index, newNodes, index + 1, _nodes.Length - index);
 
+                var indexValues = Popcnt.PopCount(_bitmapValues & (bit - 1));
                 var key2 = _values.GetKey(indexValues);
                 var value2 = _values.GetValue(indexValues);
                 newNodes[index] = BitMapNode<TKey, TValue, TValues>.From(key, value, hash, shift + Shift, key2, value2);
-                // TODO clear lifted values to default
-                return new BitMapNode<TKey, TValue, TValues>(_bitmapNodes | bit, newNodes, _bitmapValues ^ bit, _values);
+                return _values.Shrink(_bitmapNodes | bit, newNodes, _bitmapValues ^ bit, (uint) indexValues);
             }
             else
             {
