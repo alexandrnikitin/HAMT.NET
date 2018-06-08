@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 
 namespace HAMT.NET.Benchmarks
@@ -9,43 +10,57 @@ namespace HAMT.NET.Benchmarks
         private const int N = 1002;
         private readonly int[] _numbers;
         private readonly Random _random = new Random(42);
-        private readonly ImmutableDictionary<int, int> _sut;
-        private readonly V2.ImmutableDictionary<int, int> _sutV2;
+        private readonly Dictionary<int, int> _sutBaseline;
+        private readonly V2.ImmutableDictionary<int, int> _sutControl;
+        private readonly V3.ImmutableDictionary<int, int> _sutExperiment;
 
         public IntsContainsCompareBenchmark()
         {
-            _sut = ImmutableDictionary<int, int>.Empty;
-            _sutV2 = V2.ImmutableDictionary<int, int>.Empty;
+            _sutBaseline = new Dictionary<int, int>();
+            _sutControl = V2.ImmutableDictionary<int, int>.Empty;
+            _sutExperiment = V3.ImmutableDictionary<int, int>.Empty;
 
             _numbers = new int[N];
             for (var i = 0; i < _numbers.Length; i++)
             {
                 var next = _random.Next();
                 _numbers[i] = next;
-                _sut = _sut.Add(next, next);
-                _sutV2 = _sutV2.Add(next, next);
+                _sutBaseline.Add(next, next);
+                _sutControl = _sutControl.Add(next, next);
+                _sutExperiment = _sutExperiment.Add(next, next);
             }
         }
 
-        [Benchmark(OperationsPerInvoke = N)]
-        public bool Contains()
+        [Benchmark(OperationsPerInvoke = N, Baseline = true)]
+        public bool ContainsBaseline()
         {
             var consume = false;
             foreach (var n in _numbers)
             {
-                consume = _sut.ContainsKey(n);
+                consume = _sutBaseline.ContainsKey(n);
             }
 
             return consume;
         }
 
         [Benchmark(OperationsPerInvoke = N)]
-        public bool ContainsV2()
+        public bool ContainsControl()
         {
             var consume = false;
             foreach (var n in _numbers)
             {
-                consume = _sutV2.ContainsKey(n);
+                consume = _sutControl.ContainsKey(n);
+            }
+
+            return consume;
+        }
+        [Benchmark(OperationsPerInvoke = N)]
+        public bool ContainsExperiment()
+        {
+            var consume = false;
+            foreach (var n in _numbers)
+            {
+                consume = _sutExperiment.ContainsKey(n);
             }
 
             return consume;
