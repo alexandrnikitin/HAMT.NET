@@ -14,5 +14,12 @@ namespace HAMT.NET.Tests.V3
             Assert.True(sut2.ContainsKey(1, (uint)1.GetHashCode(), 0));
             Assert.True(sut2.ContainsKey(3, (uint)3.GetHashCode(), 1));
         }
+
+        [Fact]
+        public void TestAdd()
+        {
+            var sut = new ValueNode1<int, int>(1, 2);
+            var actual = sut.Add(3, 4, 0, new NET.V3.ImmutableDictionary<int, int>[0], 0, 1);
+        }
     }
 }

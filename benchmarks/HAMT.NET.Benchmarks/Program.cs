@@ -7,7 +7,7 @@ namespace HAMT.NET.Benchmarks
     {
         static void Main(string[] args)
         {
-            BenchmarkRunner.Run<ValueNode2Benchmarks>();
+            BenchmarkRunner.Run<ValueNode2AddBenchmarks>();
         }
     }
 }

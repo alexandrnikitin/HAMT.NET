@@ -1,10 +1,77 @@
 ﻿using System;
 using System.Diagnostics.Contracts;
+using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace HAMT.NET.V3
 {
+    public interface IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
+    {
+        [Pure]
+        bool ContainsKey(TKey key, uint hash, long index);
+
+        [Pure]
+        TKey GetKey(long index);
+
+        [Pure]
+        TValue GetValue(long index);
+
+        [Pure]
+        ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
+            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index);
+    }
+
+    public static class ValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
+    {
+        public static unsafe bool ContainsKey<TValues>(TValues this0, TKey key, uint hash, long index) where TValues: struct 
+        {
+            var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
+        }
+
+        public static unsafe TKey GetKey<TValues>(TValues this0, long index) where TValues : struct
+        {
+            var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+            return Unsafe.Read<TKey>(ptr);
+        }
+
+        public static unsafe TValue GetValue<TValues>(TValues this0, long index) where TValues : struct
+        {
+            var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()) + Unsafe.SizeOf<TKey>();
+            return Unsafe.Read<TValue>(ptr);
+        }
+
+        public static unsafe ImmutableDictionary<TKey, TValue> Expand<TValues, TValues2>(TValues this0, TKey key, TValue value, ulong bitmapNodes,
+            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
+            where TValues : struct, IValueNodes<TKey, TValue> where TValues2 : struct, IValueNodes<TKey, TValue>
+        {
+            var that = default(TValues2);
+            var ptrSrc = Unsafe.AsPointer(ref this0);
+            var ptrDst = Unsafe.AsPointer(ref that);
+            Unsafe.CopyBlock(ptrSrc, ptrDst, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.Write((byte*)ptrDst + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
+            Unsafe.Write((byte*)ptrDst + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
+            Unsafe.CopyBlock(
+                (byte*)ptrSrc + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+                (byte*)ptrDst + (uint)((index + 2) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), 
+                (uint) (Unsafe.SizeOf<TValues>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+
+            return new BitMapNode<TKey, TValue, TValues2>(bitmapNodes, nodes, bitmapValues, that);
+        }
+
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ValueNode0<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
+    {
+        public bool ContainsKey(TKey key, uint hash, long index) => false;
+        public TKey GetKey(long index) => default(TKey);
+        public TValue GetValue(long index) => default(TValue);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode0<TKey, TValue>, ValueNode1<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode1<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
@@ -17,28 +84,12 @@ namespace HAMT.NET.V3
         private readonly TKey _key;
         private readonly TValue _value;
 
-        public unsafe bool ContainsKey(TKey key, uint hash, long _)
-        {
-            var ptr = (int*)Unsafe.AsPointer(ref this);
-            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode1<TKey, TValue>, ValueNode2<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
 
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode2<TKey, TValue>(key, value, _key, _value);
-                return new BitMapNode<TKey, TValue, ValueNode2<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index,
-                    values);
-            }
-            else
-            {
-                var values = new ValueNode2<TKey, TValue>(_key, _value, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode2<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index,
-                    values);
-            }
-        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -57,12 +108,9 @@ namespace HAMT.NET.V3
             _value2 = value2;
         }
 
-
-        public unsafe bool ContainsKey(TKey key, uint hash, long index)
-        {
-            var ptr = (byte*)Unsafe.AsPointer(ref this) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
 
         public unsafe bool ContainsKeyBaseline(TKey key, uint hash, long index)
         {
@@ -73,8 +121,10 @@ namespace HAMT.NET.V3
 
             return hash == (uint)_key2.GetHashCode() && key.Equals(_key2);
         }
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode2<TKey, TValue>, ValueNode3<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
 
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
+        public ImmutableDictionary<TKey, TValue> AddBaseline(TKey key, TValue value, ulong bitmapNodes,
             ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
         {
             if (index == 0)
@@ -94,8 +144,10 @@ namespace HAMT.NET.V3
                 return new BitMapNode<TKey, TValue, ValueNode3<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
             }
         }
+
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode3<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -115,50 +167,15 @@ namespace HAMT.NET.V3
             _value3 = value3;
         }
 
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode3<TKey, TValue>, ValueNode4<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
 
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-        }
-
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode4<TKey, TValue>(key, value, _key1, _value1, _key2, _value2, _key3, _value3);
-                return new BitMapNode<TKey, TValue, ValueNode4<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 1)
-            {
-                var values = new ValueNode4<TKey, TValue>(_key1, _value1, key, value, _key2, _value2, _key3, _value3);
-                return new BitMapNode<TKey, TValue, ValueNode4<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 2)
-            {
-                var values = new ValueNode4<TKey, TValue>(_key1, _value1, _key2, _value2, key, value, _key3, _value3);
-                return new BitMapNode<TKey, TValue, ValueNode4<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            {
-                var values = new ValueNode4<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode4<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-        }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode4<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -182,61 +199,14 @@ namespace HAMT.NET.V3
             _value4 = value4;
         }
 
-
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            if (index == 2)
-            {
-                return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-            }
-
-            return hash == (uint) _key4.GetHashCode() && key.Equals(_key4);
-        }
-
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode5<TKey, TValue>(key, value, _key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4);
-                return new BitMapNode<TKey, TValue, ValueNode5<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 1)
-            {
-                var values = new ValueNode5<TKey, TValue>(_key1, _value1, key, value, _key2, _value2, _key3, _value3, _key4, _value4);
-                return new BitMapNode<TKey, TValue, ValueNode5<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 2)
-            {
-                var values = new ValueNode5<TKey, TValue>(_key1, _value1, _key2, _value2, key, value, _key3, _value3, _key4, _value4);
-                return new BitMapNode<TKey, TValue, ValueNode5<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 3)
-            {
-                var values = new ValueNode5<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, key, value, _key4, _value4);
-                return new BitMapNode<TKey, TValue, ValueNode5<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            {
-                var values = new ValueNode5<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode5<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode4<TKey, TValue>, ValueNode5<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode5<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -265,72 +235,15 @@ namespace HAMT.NET.V3
             _value5 = value5;
         }
 
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode5<TKey, TValue>, ValueNode6<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
 
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            if (index == 2)
-            {
-                return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-            }
-
-            if (index == 3)
-            {
-                return hash == (uint) _key4.GetHashCode() && key.Equals(_key4);
-            }
-
-            return hash == (uint) _key5.GetHashCode() && key.Equals(_key5);
-        }
-
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode6<TKey, TValue>(key, value, _key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 1)
-            {
-                var values = new ValueNode6<TKey, TValue>(_key1, _value1, key, value, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 2)
-            {
-                var values = new ValueNode6<TKey, TValue>(_key1, _value1, _key2, _value2, key, value, _key3, _value3, _key4, _value4, _key5, _value5);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 3)
-            {
-                var values = new ValueNode6<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, key, value, _key4, _value4, _key5, _value5);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            if (index == 4)
-            {
-                var values = new ValueNode6<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, key, value, _key5, _value5);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-
-            {
-                var values = new ValueNode6<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode6<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-        }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode6<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -363,77 +276,14 @@ namespace HAMT.NET.V3
             _value6 = value6;
         }
 
-
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            if (index == 2)
-            {
-                return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-            }
-
-            if (index == 3)
-            {
-                return hash == (uint) _key4.GetHashCode() && key.Equals(_key4);
-            }
-
-            if (index == 4)
-            {
-                return hash == (uint) _key5.GetHashCode() && key.Equals(_key5);
-            }
-
-            return hash == (uint) _key6.GetHashCode() && key.Equals(_key6);
-        }
-
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode7<TKey, TValue>(key, value, _key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 1)
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, key, value, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 2)
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, _key2, _value2, key, value, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 3)
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, key, value, _key4, _value4, _key5, _value5, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 4)
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, key, value, _key5, _value5, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 5)
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, key, value, _key6, _value6);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            {
-                var values = new ValueNode7<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode7<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode6<TKey, TValue>, ValueNode7<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode7<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -470,87 +320,14 @@ namespace HAMT.NET.V3
             _value7 = value7;
         }
 
-
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            if (index == 2)
-            {
-                return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-            }
-
-            if (index == 3)
-            {
-                return hash == (uint) _key4.GetHashCode() && key.Equals(_key4);
-            }
-
-            if (index == 4)
-            {
-                return hash == (uint) _key5.GetHashCode() && key.Equals(_key5);
-            }
-
-            if (index == 5)
-            {
-                return hash == (uint) _key6.GetHashCode() && key.Equals(_key6);
-            }
-
-            return hash == (uint) _key7.GetHashCode() && key.Equals(_key7);
-        }
-
-        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-        {
-            if (index == 0)
-            {
-                var values = new ValueNode8<TKey, TValue>(key, value, _key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 1)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, key, value, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 2)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, key, value, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 3)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, key, value, _key4, _value4, _key5, _value5, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 4)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, key, value, _key5, _value5, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 5)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, key, value, _key6, _value6, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            if (index == 6)
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, key, value, _key7, _value7);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-            {
-                var values = new ValueNode8<TKey, TValue>(_key1, _value1, _key2, _value2, _key3, _value3, _key4, _value4, _key5, _value5, _key6, _value6, _key7, _value7, key, value);
-                return new BitMapNode<TKey, TValue, ValueNode8<TKey, TValue>>(bitmapNodes, nodes, bitmapValues | index, values);
-            }
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
+        public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index) =>
+            ValueNodes<TKey, TValue>.Expand<ValueNode7<TKey, TValue>, ValueNode8<TKey, TValue>>(this, key, value, bitmapNodes, nodes, bitmapValues, index);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct ValueNode8<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -591,61 +368,14 @@ namespace HAMT.NET.V3
             _value8 = value8;
         }
 
-
-        public bool ContainsKey(TKey key, uint hash, long index)
-        {
-            if (index == 0)
-            {
-                return hash == (uint) _key1.GetHashCode() && key.Equals(_key1);
-            }
-
-            if (index == 1)
-            {
-                return hash == (uint) _key2.GetHashCode() && key.Equals(_key2);
-            }
-
-            if (index == 2)
-            {
-                return hash == (uint) _key3.GetHashCode() && key.Equals(_key3);
-            }
-
-            if (index == 3)
-            {
-                return hash == (uint) _key4.GetHashCode() && key.Equals(_key4);
-            }
-
-            if (index == 4)
-            {
-                return hash == (uint) _key5.GetHashCode() && key.Equals(_key5);
-            }
-
-            if (index == 5)
-            {
-                return hash == (uint) _key6.GetHashCode() && key.Equals(_key6);
-            }
-
-            if (index == 6)
-            {
-                return hash == (uint) _key7.GetHashCode() && key.Equals(_key7);
-            }
-
-            return hash == (uint) _key8.GetHashCode() && key.Equals(_key8);
-        }
+        public bool ContainsKey(TKey key, uint hash, long index) => ValueNodes<TKey, TValue>.ContainsKey(this, key, hash, index);
+        public TKey GetKey(long index) => ValueNodes<TKey, TValue>.GetKey(this, index);
+        public TValue GetValue(long index) => ValueNodes<TKey, TValue>.GetValue(this, index);
 
         public ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
             ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
         {
             throw new NotImplementedException();
         }
-    }
-
-    public interface IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
-    {
-        [Pure]
-        bool ContainsKey(TKey key, uint hash, long index);
-
-        [Pure]
-        ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index);
     }
 }

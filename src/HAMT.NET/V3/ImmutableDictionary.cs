@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace HAMT.NET.V3
@@ -27,11 +28,12 @@ namespace HAMT.NET.V3
     internal sealed class EmptyNode<TKey, TValue> : ImmutableDictionary<TKey, TValue> where TKey : IEquatable<TKey>
     {
         internal override ImmutableDictionary<TKey, TValue> Add(TKey key, TValue value, uint hash, int shift) =>
-            new BitMapNode<TKey, TValue, ValueNode1<TKey, TValue>>(0, null, 1U << (int)((hash >> shift) & Mask), new ValueNode1<TKey, TValue>(key, value));
+            new BitMapNode<TKey, TValue, ValueNode1<TKey, TValue>>(0, new ImmutableDictionary<TKey, TValue>[0], 1U << (int)((hash >> shift) & Mask), new ValueNode1<TKey, TValue>(key, value));
 
         internal override bool ContainsKey(TKey key, uint hash, int shift) => false;
     }
 
+//    [StructLayout(LayoutKind.Sequential)]
     internal sealed class BitMapNode<TKey, TValue, TValues> : ImmutableDictionary<TKey, TValue> 
         where TKey : IEquatable<TKey> where TValues: struct, IValueNodes<TKey, TValue>
     {
@@ -55,7 +57,7 @@ namespace HAMT.NET.V3
             {
                 var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length];
                 Array.Copy(_nodes, newNodes, _nodes.Length);
-                var index = Popcnt.PopCount((_bitmapNodes >> (int) bit) & Mask);
+                var index = Popcnt.PopCount(_bitmapNodes & (bit - 1));
                 newNodes[index] = _nodes[index].Add(key, value, hash, shift + Shift);
                 return new BitMapNode<TKey, TValue, TValues>(_bitmapNodes, newNodes, _bitmapValues, _values);
             }
@@ -63,23 +65,57 @@ namespace HAMT.NET.V3
             {
                 // TODO collisions and same value
                 var newNodes = new ImmutableDictionary<TKey, TValue>[_nodes.Length + 1];
-                var index = Popcnt.PopCount((_bitmapNodes >> (int)bit) & Mask);
+                var index = Popcnt.PopCount(_bitmapNodes & (bit - 1));
+                var indexValues = Popcnt.PopCount(_bitmapValues & (bit - 1));
                 Array.Copy(_nodes, newNodes, index);
                 Array.Copy(_nodes, index, newNodes, index + 1, _nodes.Length - index);
-                newNodes[index] = AddTwo(key, value, hash, shift + 1, bit);
+
+                var key2 = _values.GetKey(indexValues);
+                var value2 = _values.GetValue(indexValues);
+                newNodes[index] = BitMapNode<TKey, TValue, TValues>.From(key, value, hash, shift + Shift, key2, value2);
                 // TODO clear lifted values to default
-                return new BitMapNode<TKey, TValue, TValues>(_bitmapNodes ^ bit, newNodes, _bitmapValues | bit, _values);
+                return new BitMapNode<TKey, TValue, TValues>(_bitmapNodes | bit, newNodes, _bitmapValues ^ bit, _values);
             }
             else
             {
-                var index = (uint)Popcnt.PopCount((_bitmapValues >> (int)bit) & Mask);
-                return _values.Add(key, value, _bitmapNodes, _nodes, _bitmapValues, index);
+                var index = (uint)Popcnt.PopCount(_bitmapValues & (bit - 1));
+                return _values.Add(key, value, _bitmapNodes, _nodes, _bitmapValues | bit, index);
             }
         }
 
-        private ImmutableDictionary<TKey, TValue> AddTwo(TKey key, TValue value, uint hash, int shift, uint bit)
+        private static ImmutableDictionary<TKey, TValue> From(TKey key, TValue value, uint hash, int shift, TKey key2, TValue value2)
         {
-            throw new NotImplementedException();
+            if (hash == (uint)key2.GetHashCode() && key.Equals(key2))
+            {
+                // TODO lift hash and key equlity (update) to above layer
+                var newValues = new ValueNode1<TKey, TValue>(key, value);
+                return new BitMapNode<TKey, TValue, ValueNode1<TKey, TValue>>(0, new ImmutableDictionary<TKey, TValue>[0], 1U << (int)((hash >> shift) & Mask), newValues);
+            }
+            else if (hash == (uint)key2.GetHashCode())
+            {
+                // TODO handle collisions, at what shift level?
+                throw new NotImplementedException();
+            }
+            else
+            {
+                var bit1 = 1U << (int)(((uint)key2.GetHashCode() >> shift) & Mask);
+                var bit2 = 1U << (int)((hash >> shift) & Mask);
+                if (bit1 < bit2)
+                {
+                    var newValues = new ValueNode2<TKey, TValue>(key2, value2, key, value);
+                    return new BitMapNode<TKey, TValue, ValueNode2<TKey, TValue>>(0, new ImmutableDictionary<TKey, TValue>[0], bit1 | bit2, newValues);
+                }
+                else if (bit1 > bit2)
+                {
+                    var newValues = new ValueNode2<TKey, TValue>(key, value, key2, value2);
+                    return new BitMapNode<TKey, TValue, ValueNode2<TKey, TValue>>(0, new ImmutableDictionary<TKey, TValue>[0], bit1 | bit2, newValues);
+                }
+                else
+                {
+                    var newNodes = BitMapNode<TKey, TValue, TValues>.From(key, value, hash, shift + Shift, key2, value2);
+                    return new BitMapNode<TKey, TValue, ValueNode0<TKey, TValue>>(bit1, new []{ newNodes }, 0, new ValueNode0<TKey,TValue>());
+                }
+            }
         }
 
         internal override bool ContainsKey(TKey key, uint hash, int shift)
@@ -87,12 +123,12 @@ namespace HAMT.NET.V3
             var bit = 1U << (int) ((hash >> shift) & Mask);
             if ((_bitmapNodes & bit) != 0)
             {
-                var index = Popcnt.PopCount((_bitmapNodes >> (int)bit) & Mask);
+                var index = Popcnt.PopCount(_bitmapNodes & (bit - 1));
                 return _nodes[index].ContainsKey(key, hash, shift + Shift);
             }
             else if ((_bitmapValues & bit) != 0)
             {
-                var index = Popcnt.PopCount((_bitmapValues >> (int)bit) & Mask);
+                var index = Popcnt.PopCount(_bitmapValues & (bit - 1));
                 return _values.ContainsKey(key, hash, index);
             }
             else
