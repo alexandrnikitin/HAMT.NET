@@ -20,6 +20,7 @@ namespace HAMT.NET.Tests.V3
             sut = sut.Add(1, 2);
             Assert.True(sut.ContainsKey(1));
         }
+
         [Fact]
         public void Test20()
         {
@@ -30,30 +31,26 @@ namespace HAMT.NET.Tests.V3
             sut = sut.Add(3, 3);
             sut = sut.Add(4, 4);
             Assert.True(sut.ContainsKey(0));
+            Assert.True(sut.ContainsKey(1));
+            Assert.True(sut.ContainsKey(2));
+            Assert.True(sut.ContainsKey(3));
+            Assert.True(sut.ContainsKey(4));
         }
 
         [Fact]
         public void Test3()
         {
             var sut = ImmutableDictionaryV3.Empty;
-            for (var i = 0; i < 10; i++)
+            var N = 1000000;
+            for (var i = 0; i < N; i++)
             {
                 sut = sut.Add(i,i);
             }
 
-            for (var i = 0; i < 10; i++)
+            for (var i = 0; i < N; i++)
             {
-                Assert.True(sut.ContainsKey(i), $"No {i}");
+                Assert.True(sut.ContainsKey(i));
             }
-        }
-
-        [Fact]
-        public void Test4()
-        {
-         const int Shift = 3;
-        const int Mask = (1 << Shift) - 1;
-            var hash = 0;
-            var bit = 1U << (int)((hash >> Shift) & Mask);
         }
     }
 }

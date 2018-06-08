@@ -44,35 +44,35 @@ namespace HAMT.NET.V3
             return Unsafe.Read<TValue>(ptr);
         }
 
-        public static unsafe ImmutableDictionary<TKey, TValue> Expand<TValues, TValues2>(TValues this0, TKey key, TValue value, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
-            where TValues : struct, IValueNodes<TKey, TValue> where TValues2 : struct, IValueNodes<TKey, TValue>
-        {
-            var that = default(TValues2);
-            var ptrSrc = Unsafe.AsPointer(ref this0);
-            var ptrDst = Unsafe.AsPointer(ref that);
-            Unsafe.CopyBlock(ptrSrc, ptrDst, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-            Unsafe.Write((byte*)ptrDst + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
-            Unsafe.Write((byte*)ptrDst + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
-            Unsafe.CopyBlock(
-                (byte*)ptrSrc + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
-                (byte*)ptrDst + (uint)((index + 2) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), 
-                (uint) (Unsafe.SizeOf<TValues>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-
-            return new BitMapNode<TKey, TValue, TValues2>(bitmapNodes, nodes, bitmapValues, that);
-        }
-
-        public static unsafe ImmutableDictionary<TKey, TValue> Shrink<TFrom, TTo>(TFrom @from, ulong bitmapNodes,
-            ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
+        public static unsafe ImmutableDictionary<TKey, TValue> Expand<TFrom, TTo>(
+            TFrom @from, TKey key, TValue value, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
             where TFrom : struct, IValueNodes<TKey, TValue> where TTo : struct, IValueNodes<TKey, TValue>
         {
             var to = default(TTo);
-            var ptrSrc = Unsafe.AsPointer(ref @from);
-            var ptrDst = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlock(ptrSrc, ptrDst, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            var ptrFrom = Unsafe.AsPointer(ref @from);
+            var ptrTo = Unsafe.AsPointer(ref to);
+            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
+            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
             Unsafe.CopyBlock(
-                (byte*)ptrSrc + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
-                (byte*)ptrDst + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), 
+                (byte*)ptrTo + (uint)((index + 2) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+                (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+                (uint) (Unsafe.SizeOf<TFrom>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+
+            return new BitMapNode<TKey, TValue, TTo>(bitmapNodes, nodes, bitmapValues, to);
+        }
+
+        public static unsafe ImmutableDictionary<TKey, TValue> Shrink<TFrom, TTo>(
+            TFrom @from, ulong bitmapNodes, ImmutableDictionary<TKey, TValue>[] nodes, ulong bitmapValues, uint index)
+            where TFrom : struct, IValueNodes<TKey, TValue> where TTo : struct, IValueNodes<TKey, TValue>
+        {
+            var to = default(TTo);
+            var ptrFrom = Unsafe.AsPointer(ref @from);
+            var ptrTo = Unsafe.AsPointer(ref to);
+            Unsafe.CopyBlock(ptrFrom, ptrTo, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.CopyBlock(
+                (byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+                (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>() - index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
 
             return new BitMapNode<TKey, TValue, TTo>(bitmapNodes, nodes, bitmapValues, to);
