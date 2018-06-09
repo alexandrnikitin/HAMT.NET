@@ -11,14 +11,14 @@ namespace HAMT.NET.Benchmarks
         private readonly int[] _numbers;
         private readonly Random _random = new Random(42);
         private readonly Dictionary<int, int> _sutBaseline;
-        private readonly V2.ImmutableDictionary<int, int> _sutControl;
-        private readonly V3.ImmutableDictionary<int, int> _sutExperiment;
+        private readonly V3.ImmutableDictionary<int, int> _sutControl;
+        private readonly V4.ImmutableDictionary<int, int> _sutExperiment;
 
         public IntsContainsCompareBenchmark()
         {
             _sutBaseline = new Dictionary<int, int>();
-            _sutControl = V2.ImmutableDictionary<int, int>.Empty;
-            _sutExperiment = V3.ImmutableDictionary<int, int>.Empty;
+            _sutControl = V3.ImmutableDictionary<int, int>.Empty;
+            _sutExperiment = V4.ImmutableDictionary<int, int>.Empty;
 
             _numbers = new int[N];
             for (var i = 0; i < _numbers.Length; i++)

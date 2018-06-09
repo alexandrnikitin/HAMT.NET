@@ -30,19 +30,19 @@ namespace HAMT.NET.V4
         public static unsafe bool ContainsKey<TValues>(TValues this0, TKey key, uint hash, long index) where TValues: struct 
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
+            return hash == (uint)Unsafe.ReadUnaligned<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
         }
 
         public static unsafe TKey GetKey<TValues>(TValues this0, long index) where TValues : struct
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-            return Unsafe.Read<TKey>(ptr);
+            return Unsafe.ReadUnaligned<TKey>(ptr);
         }
 
         public static unsafe TValue GetValue<TValues>(TValues this0, long index) where TValues : struct
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()) + Unsafe.SizeOf<TKey>();
-            return Unsafe.Read<TValue>(ptr);
+            return Unsafe.ReadUnaligned<TValue>(ptr);
         }
 
         public static unsafe ImmutableDictionary<TKey, TValue> Expand<TFrom, TTo, TBranchNodes>(
@@ -53,12 +53,12 @@ namespace HAMT.NET.V4
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
-            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
-            Unsafe.CopyBlock(
-                (byte*)ptrTo + (uint)((index + 2) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
-                (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.WriteUnaligned((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
+            Unsafe.WriteUnaligned((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
+            Unsafe.CopyBlockUnaligned(
+                (byte*)ptrTo + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
+                (byte*)ptrFrom + (uint)((index) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
 
             return new BitMapNode<TKey, TValue, TTo, TBranchNodes>(bitmapNodes, nodes, bitmapValues, to);
@@ -73,18 +73,18 @@ namespace HAMT.NET.V4
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlock(ptrFrom, ptrTo, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-            Unsafe.CopyBlock(
+            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.CopyBlockUnaligned(
                 (byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
-                (uint) (Unsafe.SizeOf<TFrom>() - index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+                (uint) (Unsafe.SizeOf<TFrom>() - (index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
 
             return new BitMapNode<TKey, TValue, TTo, TBranchNodes>(bitmapNodes, nodes, bitmapValues, to);
         }
 
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode0<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         public bool ContainsKey(TKey key, uint hash, long index) => false;
@@ -104,7 +104,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode1<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         public ValueNode1(TKey key, TValue value)
@@ -133,7 +133,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode2<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -176,7 +176,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode3<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -213,7 +213,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode4<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -254,7 +254,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode5<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -300,7 +300,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode6<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -349,7 +349,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode7<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
@@ -402,7 +402,7 @@ namespace HAMT.NET.V4
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct ValueNode8<TKey, TValue> : IValueNodes<TKey, TValue> where TKey : IEquatable<TKey>
     {
         private readonly TKey _key1;
