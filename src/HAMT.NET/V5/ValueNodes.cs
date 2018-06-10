@@ -30,19 +30,19 @@ namespace HAMT.NET.V5
         public static unsafe bool ContainsKey<TValues>(TValues this0, TKey key, uint hash, long index) where TValues: struct 
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-            return hash == (uint)Unsafe.ReadUnaligned<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
+            return hash == (uint)Unsafe.Read<TKey>(ptr).GetHashCode() && key.Equals(Unsafe.Read<TKey>(ptr));
         }
 
         public static unsafe TKey GetKey<TValues>(TValues this0, long index) where TValues : struct
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-            return Unsafe.ReadUnaligned<TKey>(ptr);
+            return Unsafe.Read<TKey>(ptr);
         }
 
         public static unsafe TValue GetValue<TValues>(TValues this0, long index) where TValues : struct
         {
             var ptr = (byte*)Unsafe.AsPointer(ref this0) + index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()) + Unsafe.SizeOf<TKey>();
-            return Unsafe.ReadUnaligned<TValue>(ptr);
+            return Unsafe.Read<TValue>(ptr);
         }
 
         public static unsafe ImmutableDictionary<TKey, TValue> Expand<TFrom, TTo, TBranchNodes>(
@@ -53,10 +53,10 @@ namespace HAMT.NET.V5
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-            Unsafe.WriteUnaligned((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
-            Unsafe.WriteUnaligned((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
-            Unsafe.CopyBlockUnaligned(
+            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())), key);
+            Unsafe.Write((byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())) + Unsafe.SizeOf<TKey>(), value);
+            Unsafe.CopyBlock(
                 (byte*)ptrTo + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (byte*)ptrFrom + (uint)((index) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>()- index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
@@ -73,8 +73,8 @@ namespace HAMT.NET.V5
             var to = default(TTo);
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
-            Unsafe.CopyBlockUnaligned(
+            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint) (index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));
+            Unsafe.CopyBlock(
                 (byte*)ptrTo + (uint)(index * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (byte*)ptrFrom + (uint)((index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())),
                 (uint) (Unsafe.SizeOf<TFrom>() - (index + 1) * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>())));

@@ -43,12 +43,12 @@ namespace HAMT.NET.V5
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
 
-            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint)(index * IntPtr.Size));
+            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint)(index * IntPtr.Size));
             var key2 = values.GetKey(indexValues);
             var value2 = values.GetValue(indexValues);
             var newNode = BitMapNode<TKey, TValue, TValueNodes, TFrom>.From(key, value, hash, shift + ImmutableDictionary.Shift, key2, value2);
-            Unsafe.WriteUnaligned((byte*)ptrTo + (uint)(index * IntPtr.Size), newNode);
-            Unsafe.CopyBlockUnaligned(
+            Unsafe.Write((byte*)ptrTo + (uint)(index * IntPtr.Size), newNode);
+            Unsafe.CopyBlock(
                 (byte*)ptrTo + (uint)((index + 1) * IntPtr.Size),
                 (byte*)ptrFrom + (uint)((index) * IntPtr.Size),
                 (uint)(Unsafe.SizeOf<TFrom>() - index * IntPtr.Size));
@@ -70,13 +70,13 @@ namespace HAMT.NET.V5
             var to = default(TBranchNodes);
             var ptrFrom = Unsafe.AsPointer(ref @from);
             var ptrTo = Unsafe.AsPointer(ref to);
-            Unsafe.CopyBlockUnaligned(ptrTo, ptrFrom, (uint) Unsafe.SizeOf<TBranchNodes>());
+            Unsafe.CopyBlock(ptrTo, ptrFrom, (uint) Unsafe.SizeOf<TBranchNodes>());
             for (int i = 0; i < Unsafe.SizeOf<TBranchNodes>(); i += IntPtr.Size)
             {
                 Debug.Assert(Unsafe.AsRef<ImmutableDictionary<TKey, TValue>>((byte*)ptrTo + i) != null);
             }
             var newNode = Unsafe.AsRef<ImmutableDictionary<TKey, TValue>>((byte*)ptrTo + index * IntPtr.Size).Add(key, value, hash, shift + ImmutableDictionary.Shift);
-            Unsafe.WriteUnaligned((byte*)ptrTo + index * IntPtr.Size, newNode);
+            Unsafe.Write((byte*)ptrTo + index * IntPtr.Size, newNode);
 
             for (int i = 0; i < Unsafe.SizeOf<TBranchNodes>(); i += IntPtr.Size)
             {
