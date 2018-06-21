@@ -1,6 +1,8 @@
 # HAMT.NET
 Hash Array Mapped Trie implementation for .NET
 
+This is a work in progress. It contains HAMT and CHAMP implementations for .NET. In additional it has an evolution over CHAMP (Inlined CHAMP) that utilizes generics and value types and "inlines" node and key-value array into class layout. Paper will follow.
+
 ### Preliminary benchmark results:
 
 `HAMT.NET` vs BCL's `System.Collections.Immutable.ImmutableDictionary<>` vs `ImTools.ImHashMap<>`
